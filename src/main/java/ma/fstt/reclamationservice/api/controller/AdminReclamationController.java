@@ -26,7 +26,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin/reclamations")
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"}, allowCredentials = "true")
+// CORS is handled by API Gateway - no @CrossOrigin here
 @RequiredArgsConstructor
 @Slf4j
 public class AdminReclamationController {
@@ -129,8 +129,7 @@ public class AdminReclamationController {
             Reclamation reclamation = reclamationService.resolveReclamationWithPenalty(
                     reclamationId,
                     request.getResolutionNotes(),
-                    request.isApproved()
-            );
+                    request.isApproved());
 
             response.put("status", "success");
             response.put("message", "Reclamation resolved successfully");
@@ -158,8 +157,7 @@ public class AdminReclamationController {
         try {
             Reclamation reclamation = reclamationService.rejectReclamation(
                     reclamationId,
-                    request.getRejectionNotes()
-            );
+                    request.getRejectionNotes());
 
             response.put("status", "success");
             response.put("message", "Reclamation rejected");
@@ -198,21 +196,23 @@ public class AdminReclamationController {
             @PathVariable String filename) {
         try {
             log.info("🖼️ Serving file: reclamationId={}, filename={}", reclamationId, filename);
-            
+
             // Decode URL-encoded filename
             String decodedFilename = java.net.URLDecoder.decode(filename, "UTF-8");
             log.info("📝 Decoded filename: {}", decodedFilename);
-            
+
             // Use the configured storage path
-            Path filePath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), decodedFilename).normalize();
+            Path filePath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), decodedFilename)
+                    .normalize();
             log.info("📁 Looking for file at: {}", filePath.toAbsolutePath());
-            
+
             // Check if file exists
             if (!java.nio.file.Files.exists(filePath)) {
                 log.warn("❌ File does not exist: {}", filePath.toAbsolutePath());
                 // Try with original filename (in case decoding wasn't needed)
                 if (!filename.equals(decodedFilename)) {
-                    Path altPath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), filename).normalize();
+                    Path altPath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), filename)
+                            .normalize();
                     log.info("🔄 Trying alternative path: {}", altPath.toAbsolutePath());
                     if (java.nio.file.Files.exists(altPath)) {
                         filePath = altPath;
@@ -223,9 +223,9 @@ public class AdminReclamationController {
                     return ResponseEntity.notFound().build();
                 }
             }
-            
+
             Resource resource = new UrlResource(filePath.toUri());
-            
+
             if (resource.exists() && resource.isReadable()) {
                 String contentType = "application/octet-stream";
                 String lowerFilename = decodedFilename.toLowerCase();
@@ -238,7 +238,7 @@ public class AdminReclamationController {
                 } else if (lowerFilename.endsWith(".webp")) {
                     contentType = "image/webp";
                 }
-                
+
                 log.info("✅ File found, serving with content-type: {}", contentType);
                 return ResponseEntity.ok()
                         .contentType(MediaType.parseMediaType(contentType))
@@ -263,13 +263,16 @@ public class AdminReclamationController {
     public ResponseEntity<Map<String, Object>> getStatistics() {
         try {
             List<Reclamation> allReclamations = reclamationService.getAllReclamations();
-            
+
             Map<String, Object> stats = new HashMap<>();
             stats.put("total", allReclamations.size());
             stats.put("open", allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.OPEN).count());
-            stats.put("inReview", allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.IN_REVIEW).count());
-            stats.put("resolved", allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.RESOLVED).count());
-            stats.put("rejected", allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.REJECTED).count());
+            stats.put("inReview",
+                    allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.IN_REVIEW).count());
+            stats.put("resolved",
+                    allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.RESOLVED).count());
+            stats.put("rejected",
+                    allReclamations.stream().filter(r -> r.getStatus() == ReclamationStatus.REJECTED).count());
 
             return ResponseEntity.ok(stats);
         } catch (Exception e) {
@@ -277,6 +280,7 @@ public class AdminReclamationController {
             return ResponseEntity.status(500).build();
         }
     }
+
     private static class ResolveReclamationRequest {
         private String resolutionNotes;
         private boolean approved;
@@ -310,4 +314,3 @@ public class AdminReclamationController {
         }
     }
 }
-

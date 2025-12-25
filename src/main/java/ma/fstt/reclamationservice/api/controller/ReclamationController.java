@@ -24,13 +24,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/reclamations")
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"}, allowCredentials = "true")
+// CORS is handled by API Gateway - no @CrossOrigin here
 @RequiredArgsConstructor
 public class ReclamationController {
 
     private final ReclamationService reclamationService;
 
-    @PostMapping(value = "/create", consumes = {"multipart/form-data"})
+    @PostMapping(value = "/create", consumes = { "multipart/form-data" })
     public ResponseEntity<Map<String, Object>> createReclamationWithImages(
             @RequestParam("bookingId") Long bookingId,
             @RequestParam("userId") Long userId,
@@ -51,8 +51,7 @@ public class ReclamationController {
             ReclamationType type = ReclamationType.valueOf(reclamationType);
 
             Reclamation reclamation = reclamationService.createReclamation(
-                    bookingId, userId, role, type, title, description
-            );
+                    bookingId, userId, role, type, title, description);
 
             if (files != null && !files.isEmpty()) {
                 try {
@@ -146,7 +145,8 @@ public class ReclamationController {
             @PathVariable Long bookingId,
             @PathVariable Long complainantId) {
         try {
-            Reclamation reclamation = reclamationService.getReclamationByBookingIdAndComplainantId(bookingId, complainantId);
+            Reclamation reclamation = reclamationService.getReclamationByBookingIdAndComplainantId(bookingId,
+                    complainantId);
             if (reclamation == null) {
                 return ResponseEntity.notFound().build();
             }
@@ -172,11 +172,13 @@ public class ReclamationController {
             @PathVariable String filename) {
         try {
             String decodedFilename = URLDecoder.decode(filename, "UTF-8");
-            Path filePath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), decodedFilename).normalize();
-            
+            Path filePath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), decodedFilename)
+                    .normalize();
+
             if (!Files.exists(filePath)) {
                 if (!filename.equals(decodedFilename)) {
-                    Path altPath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), filename).normalize();
+                    Path altPath = Paths.get("./uploads/reclamations", String.valueOf(reclamationId), filename)
+                            .normalize();
                     if (Files.exists(altPath)) {
                         filePath = altPath;
                     } else {
@@ -186,9 +188,9 @@ public class ReclamationController {
                     return ResponseEntity.notFound().build();
                 }
             }
-            
+
             Resource resource = new UrlResource(filePath.toUri());
-            
+
             if (resource.exists() && resource.isReadable()) {
                 String contentType = "application/octet-stream";
                 String lowerFilename = decodedFilename.toLowerCase();
@@ -201,7 +203,7 @@ public class ReclamationController {
                 } else if (lowerFilename.endsWith(".webp")) {
                     contentType = "image/webp";
                 }
-                
+
                 return ResponseEntity.ok()
                         .contentType(MediaType.parseMediaType(contentType))
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + decodedFilename + "\"")
@@ -236,7 +238,7 @@ public class ReclamationController {
         }
     }
 
-    @PutMapping(value = "/{reclamationId}", consumes = {"multipart/form-data"})
+    @PutMapping(value = "/{reclamationId}", consumes = { "multipart/form-data" })
     public ResponseEntity<Map<String, Object>> updateReclamation(
             @PathVariable Long reclamationId,
             @RequestParam("userId") Long userId,
@@ -245,7 +247,8 @@ public class ReclamationController {
             @RequestParam(value = "files", required = false) List<MultipartFile> files) {
         Map<String, Object> response = new HashMap<>();
         try {
-            Reclamation updated = reclamationService.updateReclamation(reclamationId, userId, title, description, files);
+            Reclamation updated = reclamationService.updateReclamation(reclamationId, userId, title, description,
+                    files);
             response.put("status", "success");
             response.put("message", "Reclamation updated successfully");
             response.put("reclamation", updated);
