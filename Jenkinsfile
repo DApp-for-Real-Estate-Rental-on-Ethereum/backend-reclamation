@@ -56,7 +56,7 @@ pipeline {
                         chmod +x ./mvnw
                         ./mvnw sonar:sonar \
                           -Dsonar.projectKey=real-estate-reclamation-service \
-                          -Dsonar.host.url=http://localhost:9000 \
+                          -Dsonar.host.url=http://sonarqube:9000 \
                           -Dsonar.login=${SONARQUBE_TOKEN} || true
                     '''
                 }
