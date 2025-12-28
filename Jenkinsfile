@@ -57,7 +57,7 @@ pipeline {
                         ./mvnw sonar:sonar \
                           -Dsonar.projectKey=real-estate-reclamation-service \
                           -Dsonar.host.url=http://sonarqube:9000 \
-                          -Dsonar.login=${SONARQUBE_TOKEN} || true
+                          -Dsonar.login=${SONARQUBE_TOKEN}
                     '''
                 }
             }
