@@ -31,8 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class ReclamationService {
-    private static final String BOOKING_SERVICE_URL = "http://localhost:8083";
-    private static final String PROPERTY_SERVICE_URL = "http://localhost:8082";
+    private static final String BOOKING_SERVICE_URL = "http://booking-service:8083";
+    private static final String PROPERTY_SERVICE_URL = "http://property-service:8081";
 
     private final RestTemplate restTemplate;
     private final ReclamationRepository reclamationRepository;
@@ -43,8 +43,8 @@ public class ReclamationService {
     private final UserScoreService userScoreService;
 
     @Transactional
-    public Reclamation createReclamation(Long bookingId, Long userId, ComplainantRole role, 
-                                         ReclamationType type, String title, String description) {
+    public Reclamation createReclamation(Long bookingId, Long userId, ComplainantRole role,
+            ReclamationType type, String title, String description) {
         log.info("Creating reclamation: bookingId={}, userId={}, role={}, type={}", bookingId, userId, role, type);
 
         if (title == null || title.trim().isEmpty()) {
@@ -55,36 +55,34 @@ public class ReclamationService {
         }
 
         Long targetUserId = 0L;
-        
+
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
                     BOOKING_SERVICE_URL + "/api/bookings/" + bookingId,
-                    Map.class
-            );
-            
+                    Map.class);
+
             if (booking != null) {
                 Long bookingUserId = Long.valueOf(booking.get("userId").toString());
                 Object propertyIdObj = booking.get("propertyId");
                 String propertyId = propertyIdObj != null ? propertyIdObj.toString() : null;
-                
-                log.info("📋 Booking details - bookingId: {}, bookingUserId: {}, propertyId: {}", 
+
+                log.info("📋 Booking details - bookingId: {}, bookingUserId: {}, propertyId: {}",
                         bookingId, bookingUserId, propertyId);
-                
+
                 if (propertyId != null) {
                     Long ownerId = null;
-                    
+
                     try {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> propertyInfo = restTemplate.getForObject(
                                 BOOKING_SERVICE_URL + "/api/bookings/property/" + propertyId,
-                                Map.class
-                        );
+                                Map.class);
                         if (propertyInfo != null) {
                             log.info("✅ Got property info from booking-service");
                             log.info("🔍 Property info keys: {}", propertyInfo.keySet());
                             log.info("🔍 Property info content: {}", propertyInfo);
-                            
+
                             Object ownerIdObj = propertyInfo.get("ownerId");
                             if (ownerIdObj != null) {
                                 try {
@@ -109,12 +107,11 @@ public class ReclamationService {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> propertyInfo = restTemplate.getForObject(
                                     PROPERTY_SERVICE_URL + "/api/v1/properties/" + propertyId + "/booking-info",
-                                    Map.class
-                            );
+                                    Map.class);
                             if (propertyInfo != null) {
                                 log.info("✅ Got property info from property-service (booking-info)");
                                 log.info("🔍 Property info keys: {}", propertyInfo.keySet());
-                                
+
                                 Object ownerIdObj = propertyInfo.get("ownerId");
                                 if (ownerIdObj != null) {
                                     try {
@@ -135,14 +132,16 @@ public class ReclamationService {
                             log.error("❌ Property-service endpoint also failed: {}", e2.getMessage());
                         }
                     }
-                    
+
                     if (role == ComplainantRole.GUEST) {
                         if (ownerId != null) {
                             targetUserId = ownerId;
                             log.info("✅ Guest reclamation - targetUserId set to ownerId: {}", targetUserId);
                         } else {
-                            log.error("❌ CRITICAL: Cannot set targetUserId for GUEST - ownerId is null. PropertyId: {}", propertyId);
-                            log.error("❌ This will cause the reclamation to not appear in 'Complaints Against Me' for the host");
+                            log.error("❌ CRITICAL: Cannot set targetUserId for GUEST - ownerId is null. PropertyId: {}",
+                                    propertyId);
+                            log.error(
+                                    "❌ This will cause the reclamation to not appear in 'Complaints Against Me' for the host");
                         }
                     } else if (role == ComplainantRole.HOST) {
                         targetUserId = bookingUserId;
@@ -157,10 +156,11 @@ public class ReclamationService {
         } catch (Exception e) {
             log.error("❌ Could not fetch booking details: {}", e.getMessage(), e);
         }
-        
+
         if (targetUserId == 0L) {
             log.error("⚠️ WARNING: targetUserId is 0! Reclamation may not be linked correctly.");
-            log.error("⚠️ This will cause the reclamation to not appear in 'Complaints Against Me' for the target user.");
+            log.error(
+                    "⚠️ This will cause the reclamation to not appear in 'Complaints Against Me' for the target user.");
         } else {
             log.info("✅ Final targetUserId: {}", targetUserId);
         }
@@ -242,14 +242,15 @@ public class ReclamationService {
     }
 
     public Reclamation getReclamationByBookingIdAndComplainantId(Long bookingId, Long complainantId) {
-        List<Reclamation> reclamations = reclamationRepository.findByBookingIdAndComplainantId(bookingId, complainantId);
+        List<Reclamation> reclamations = reclamationRepository.findByBookingIdAndComplainantId(bookingId,
+                complainantId);
         return reclamations.isEmpty() ? null : reclamations.get(0);
     }
 
     @Transactional
     public void deleteReclamation(Long reclamationId, Long userId) {
         log.info("Deleting reclamation: id={}, userId={}", reclamationId, userId);
-        
+
         Reclamation reclamation = reclamationRepository.findById(reclamationId)
                 .orElseThrow(() -> new RuntimeException("Reclamation not found: " + reclamationId));
 
@@ -257,8 +258,8 @@ public class ReclamationService {
             throw new RuntimeException("Only the complainant can delete this reclamation");
         }
 
-        if (reclamation.getStatus() != ReclamationStatus.OPEN && 
-            reclamation.getStatus() != ReclamationStatus.IN_REVIEW) {
+        if (reclamation.getStatus() != ReclamationStatus.OPEN &&
+                reclamation.getStatus() != ReclamationStatus.IN_REVIEW) {
             throw new RuntimeException("Cannot delete reclamation with status: " + reclamation.getStatus());
         }
 
@@ -270,17 +271,27 @@ public class ReclamationService {
         }
 
         reclamationRepository.delete(reclamation);
+
+        try {
+            bookingPaymentContractService.setActiveReclamation(reclamation.getBookingId(), false);
+            log.info("✅ Cleared hasActiveReclamation flag for booking: {}", reclamation.getBookingId());
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to clear hasActiveReclamation flag: {}", e.getMessage());
+        }
+
         log.info("Reclamation deleted successfully: id={}", reclamationId);
     }
 
     @Transactional
     @Deprecated
-    public void resolveReclamation(Long reclamationId, BigDecimal depositToOwner, BigDecimal depositToTenant, Long dbTxId) {
+    public void resolveReclamation(Long reclamationId, BigDecimal depositToOwner, BigDecimal depositToTenant,
+            Long dbTxId) {
         log.warn("⚠️ resolveReclamation is deprecated. Use resolveReclamationWithPenalty instead.");
         log.info("Resolving reclamation: id={}, depositToOwner={}, depositToTenant={}, dbTxId={}",
                 reclamationId, depositToOwner, depositToTenant, dbTxId);
-        
-        log.warn("⚠️ This method no longer calls payment-service. Use resolveReclamationWithPenalty for full functionality.");
+
+        log.warn(
+                "⚠️ This method no longer calls payment-service. Use resolveReclamationWithPenalty for full functionality.");
     }
 
     @SuppressWarnings("unused")
@@ -336,10 +347,9 @@ public class ReclamationService {
     public Reclamation resolveReclamationWithPenalty(
             Long reclamationId,
             String resolutionNotes,
-            boolean approved
-    ) throws Exception {
+            boolean approved) throws Exception {
         Reclamation reclamation = getReclamationById(reclamationId);
-        
+
         if (reclamation.getTargetUserId() == null || reclamation.getTargetUserId() == 0) {
             log.warn("⚠️ targetUserId is null or 0 for reclamationId: {}, attempting to fix...", reclamationId);
             Long targetUserId = determineTargetUserIdFromBooking(reclamation);
@@ -351,13 +361,12 @@ public class ReclamationService {
                 log.error("❌ Could not determine targetUserId for reclamationId: {}", reclamationId);
             }
         }
-        
+
         if (approved) {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
                     BOOKING_SERVICE_URL + "/api/bookings/" + reclamation.getBookingId(),
-                    Map.class
-            );
+                    Map.class);
 
             BigDecimal totalRent = BigDecimal.ZERO;
             BigDecimal totalDeposit = BigDecimal.ZERO;
@@ -372,23 +381,25 @@ public class ReclamationService {
                     totalDeposit = new BigDecimal(depositObj.toString());
                 }
             }
-            
+
             // CRITICAL: Log deposit amount to verify it's not zero
-            log.info("🔍🔍🔍 DEPOSIT CHECK - ReclamationId: {}, BookingId: {}, TotalRent: {}, TotalDeposit: {}", 
+            log.info("🔍🔍🔍 DEPOSIT CHECK - ReclamationId: {}, BookingId: {}, TotalRent: {}, TotalDeposit: {}",
                     reclamationId, reclamation.getBookingId(), totalRent, totalDeposit);
-            
+
             if (totalDeposit.compareTo(BigDecimal.ZERO) <= 0) {
-                log.error("❌❌❌ CRITICAL ERROR: TotalDeposit is ZERO or NEGATIVE for reclamationId: {}, bookingId: {}! Deposit will NOT be refunded!", 
+                log.error(
+                        "❌❌❌ CRITICAL ERROR: TotalDeposit is ZERO or NEGATIVE for reclamationId: {}, bookingId: {}! Deposit will NOT be refunded!",
                         reclamationId, reclamation.getBookingId());
             }
 
-            PenaltyCalculatorService.PenaltyCalculationResult penaltyResult =
-                    penaltyCalculatorService.calculatePenalty(reclamation, totalRent, totalDeposit);
+            PenaltyCalculatorService.PenaltyCalculationResult penaltyResult = penaltyCalculatorService
+                    .calculatePenalty(reclamation, totalRent, totalDeposit);
 
             BigDecimal refundAmount = penaltyResult.getRefundAmount();
             Integer penaltyPoints = penaltyResult.getPenaltyPoints();
 
-            log.info("📊 Penalty calculation result - refundAmount: {}, penaltyPoints: {}, reclamationType: {}, severity: {}", 
+            log.info(
+                    "📊 Penalty calculation result - refundAmount: {}, penaltyPoints: {}, reclamationType: {}, severity: {}",
                     refundAmount, penaltyPoints, reclamation.getType(), reclamation.getSeverity());
 
             reclamation.setRefundAmount(refundAmount);
@@ -402,25 +413,27 @@ public class ReclamationService {
             if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
                 try {
                     String recipientAddress = getRecipientWalletAddress(reclamation);
-                    
+
                     String bookingStatus = booking != null ? booking.get("status").toString() : null;
-                    boolean isBookingCompleted = "COMPLETED".equals(bookingStatus) || 
-                                                "TENANT_CHECKED_OUT".equals(bookingStatus);
+                    boolean isBookingCompleted = "COMPLETED".equals(bookingStatus) ||
+                            "TENANT_CHECKED_OUT".equals(bookingStatus);
 
                     if (recipientAddress != null) {
-                        // Special handling for ACCESS_ISSUE and NOT_AS_DESCRIBED (full refund: Rent + Deposit)
+                        // Special handling for ACCESS_ISSUE and NOT_AS_DESCRIBED (full refund: Rent +
+                        // Deposit)
                         ReclamationType type = reclamation.getType();
-                        boolean isFullRefund = (type == ReclamationType.ACCESS_ISSUE || 
-                                               type == ReclamationType.NOT_AS_DESCRIBED) &&
-                                               reclamation.getComplainantRole() == ComplainantRole.GUEST;
+                        boolean isFullRefund = (type == ReclamationType.ACCESS_ISSUE ||
+                                type == ReclamationType.NOT_AS_DESCRIBED) &&
+                                reclamation.getComplainantRole() == ComplainantRole.GUEST;
 
                         if (isFullRefund) {
                             // Full refund: Rent (full, no platform fee) + Deposit (full)
                             // No platform fee for ACCESS_ISSUE and NOT_AS_DESCRIBED
-                            
-                            log.info("💰💰💰 FULL REFUND PROCESSING START - Type: {}, BookingId: {}, TotalRent: {}, TotalDeposit: {}", 
+
+                            log.info(
+                                    "💰💰💰 FULL REFUND PROCESSING START - Type: {}, BookingId: {}, TotalRent: {}, TotalDeposit: {}",
                                     type, reclamation.getBookingId(), totalRent, totalDeposit);
-                            
+
                             BigInteger rentWei = totalRent
                                     .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                     .toBigInteger();
@@ -428,25 +441,28 @@ public class ReclamationService {
                                     .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                     .toBigInteger();
 
-                            log.info("💰 Processing full refund (no platform fee): Rent={} ETH (full, wei={}), Deposit={} ETH (full, wei={})", 
+                            log.info(
+                                    "💰 Processing full refund (no platform fee): Rent={} ETH (full, wei={}), Deposit={} ETH (full, wei={})",
                                     totalRent, rentWei, totalDeposit, depositWei);
-                            
+
                             if (totalDeposit.compareTo(BigDecimal.ZERO) <= 0) {
-                                log.error("❌❌❌ CRITICAL: TotalDeposit is ZERO or NEGATIVE! Deposit will NOT be refunded!");
+                                log.error(
+                                        "❌❌❌ CRITICAL: TotalDeposit is ZERO or NEGATIVE! Deposit will NOT be refunded!");
                             }
                             if (depositWei.compareTo(BigInteger.ZERO) <= 0) {
-                                log.error("❌❌❌ CRITICAL: DepositWei is ZERO or NEGATIVE! Deposit will NOT be refunded!");
+                                log.error(
+                                        "❌❌❌ CRITICAL: DepositWei is ZERO or NEGATIVE! Deposit will NOT be refunded!");
                             }
 
                             // Calculate total refund to guest (Rent full + Deposit full)
                             BigInteger totalRefundToGuest = rentWei.add(depositWei);
-                            
+
                             // For both completed and non-completed bookings, use processPartialRefund
                             // to send Rent and Deposit separately to ensure correct refund
-                            
+
                             // Refund Rent (full, no platform fee)
                             if (rentWei.compareTo(BigInteger.ZERO) > 0) {
-                                log.info("🔄 Sending Rent refund: {} ETH (wei={}) to guest address: {}", 
+                                log.info("🔄 Sending Rent refund: {} ETH (wei={}) to guest address: {}",
                                         totalRent, rentWei, recipientAddress);
                                 try {
                                     bookingPaymentContractService.processPartialRefund(
@@ -463,10 +479,10 @@ public class ReclamationService {
                             } else {
                                 log.warn("⚠️ RentWei is ZERO, skipping Rent refund");
                             }
-                            
+
                             // Refund Deposit (full) - THIS IS THE CRITICAL PART
                             if (depositWei.compareTo(BigInteger.ZERO) > 0) {
-                                log.info("🔄🔄🔄 Sending Deposit refund: {} ETH (wei={}) to guest address: {}", 
+                                log.info("🔄🔄🔄 Sending Deposit refund: {} ETH (wei={}) to guest address: {}",
                                         totalDeposit, depositWei, recipientAddress);
                                 try {
                                     bookingPaymentContractService.processPartialRefund(
@@ -483,36 +499,43 @@ public class ReclamationService {
                             } else {
                                 log.error("❌❌❌ DepositWei is ZERO or NEGATIVE! Deposit refund will NOT be sent!");
                             }
-                            
-                            log.info("✅✅✅ Full refund processed (no platform fee): Guest={} ETH (Rent: {} + Deposit: {})", 
-                                    new BigDecimal(totalRefundToGuest).divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)),
+
+                            log.info(
+                                    "✅✅✅ Full refund processed (no platform fee): Guest={} ETH (Rent: {} + Deposit: {})",
+                                    new BigDecimal(totalRefundToGuest)
+                                            .divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)),
                                     totalRent, totalDeposit);
                         } else {
                             // Handle CLEANLINESS and SAFETY_HEALTH: Deposit + Rent (after platform fee)
                             // Handle Host reclamations: Rent to host + penalty from deposit
-                            
+
                             ReclamationType reclamationType = reclamation.getType();
-                            boolean isGuestRefundWithDeposit = (reclamationType == ReclamationType.CLEANLINESS || 
-                                                               reclamationType == ReclamationType.SAFETY_HEALTH) &&
-                                                               reclamation.getComplainantRole() == ComplainantRole.GUEST;
-                            
+                            boolean isGuestRefundWithDeposit = (reclamationType == ReclamationType.CLEANLINESS ||
+                                    reclamationType == ReclamationType.SAFETY_HEALTH) &&
+                                    reclamation.getComplainantRole() == ComplainantRole.GUEST;
+
                             if (isGuestRefundWithDeposit) {
                                 // For CLEANLINESS and SAFETY_HEALTH:
                                 // refundAmount = Deposit (full) + Rent percentage (full, not after fee)
                                 // Guest gets: Deposit + Rent percentage (full)
                                 // Platform gets: 10% of Rent percentage
                                 // Host gets: 90% of Rent percentage + remaining rent
-                                
+
                                 BigDecimal depositPortion = totalDeposit;
-                                BigDecimal rentPercentage = refundAmount.subtract(depositPortion); // Rent percentage (full)
-                                
+                                BigDecimal rentPercentage = refundAmount.subtract(depositPortion); // Rent percentage
+                                                                                                   // (full)
+
                                 // Calculate platform fee (10% of rent percentage)
                                 BigDecimal platformFeePercent = new BigDecimal("0.10");
                                 BigDecimal platformFee = rentPercentage.multiply(platformFeePercent);
-                                BigDecimal rentPercentageToHost = rentPercentage.subtract(platformFee); // 90% of percentage
-                                BigDecimal remainingRent = totalRent.subtract(rentPercentage); // Remaining rent after percentage
-                                BigDecimal totalToHost = rentPercentageToHost.add(remainingRent); // Host gets: 90% of percentage + remaining rent
-                                
+                                BigDecimal rentPercentageToHost = rentPercentage.subtract(platformFee); // 90% of
+                                                                                                        // percentage
+                                BigDecimal remainingRent = totalRent.subtract(rentPercentage); // Remaining rent after
+                                                                                               // percentage
+                                BigDecimal totalToHost = rentPercentageToHost.add(remainingRent); // Host gets: 90% of
+                                                                                                  // percentage +
+                                                                                                  // remaining rent
+
                                 BigInteger depositWei = depositPortion
                                         .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                         .toBigInteger();
@@ -525,21 +548,23 @@ public class ReclamationService {
                                 BigInteger totalToHostWei = totalToHost
                                         .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                         .toBigInteger();
-                                
-                                log.info("💰 Processing CLEANLINESS/SAFETY_HEALTH: Guest gets Deposit={} + Rent percentage={}, Platform gets {} (10% of percentage), Host gets {} (90% of percentage + remaining rent={})", 
+
+                                log.info(
+                                        "💰 Processing CLEANLINESS/SAFETY_HEALTH: Guest gets Deposit={} + Rent percentage={}, Platform gets {} (10% of percentage), Host gets {} (90% of percentage + remaining rent={})",
                                         depositPortion, rentPercentage, platformFee, totalToHost, remainingRent);
-                                
+
                                 BigInteger totalRefundToGuest = depositWei.add(rentPercentageWei);
-                                
+
                                 // Get host wallet address
                                 String hostAddress = getRecipientWalletAddressForHost(reclamation);
-                                
+
                                 // For both completed and non-completed bookings, use processPartialRefund
                                 // to send multiple amounts to different recipients
-                                
+
                                 // Send Deposit to guest - CRITICAL: This must be sent!
                                 if (depositWei.compareTo(BigInteger.ZERO) > 0) {
-                                    log.info("🔄🔄🔄 CLEANLINESS/SAFETY_HEALTH: Sending Deposit refund: {} ETH (wei={}) to guest address: {}", 
+                                    log.info(
+                                            "🔄🔄🔄 CLEANLINESS/SAFETY_HEALTH: Sending Deposit refund: {} ETH (wei={}) to guest address: {}",
                                             depositPortion, depositWei, recipientAddress);
                                     try {
                                         bookingPaymentContractService.processPartialRefund(
@@ -548,15 +573,19 @@ public class ReclamationService {
                                                 depositWei,
                                                 false // refundFromRent = false (refund from deposit) - CRITICAL!
                                         );
-                                        log.info("✅✅✅ CLEANLINESS/SAFETY_HEALTH: Deposit refund SUCCESSFULLY sent: {} ETH to guest", depositPortion);
+                                        log.info(
+                                                "✅✅✅ CLEANLINESS/SAFETY_HEALTH: Deposit refund SUCCESSFULLY sent: {} ETH to guest",
+                                                depositPortion);
                                     } catch (Exception e) {
-                                        log.error("❌❌❌ CLEANLINESS/SAFETY_HEALTH: FAILED to send Deposit refund: {}", e.getMessage(), e);
+                                        log.error("❌❌❌ CLEANLINESS/SAFETY_HEALTH: FAILED to send Deposit refund: {}",
+                                                e.getMessage(), e);
                                         throw e;
                                     }
                                 } else {
-                                    log.error("❌❌❌ CLEANLINESS/SAFETY_HEALTH: DepositWei is ZERO! Deposit refund will NOT be sent!");
+                                    log.error(
+                                            "❌❌❌ CLEANLINESS/SAFETY_HEALTH: DepositWei is ZERO! Deposit refund will NOT be sent!");
                                 }
-                                
+
                                 // Send Rent percentage (full) to guest
                                 if (rentPercentageWei.compareTo(BigInteger.ZERO) > 0) {
                                     bookingPaymentContractService.processPartialRefund(
@@ -566,7 +595,7 @@ public class ReclamationService {
                                             true // refundFromRent = true
                                     );
                                 }
-                                
+
                                 // Send Platform Fee (10% of Rent percentage)
                                 if (platformFeeWei.compareTo(BigInteger.ZERO) > 0) {
                                     String platformWallet = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
@@ -577,7 +606,7 @@ public class ReclamationService {
                                             true // refundFromRent = true
                                     );
                                 }
-                                
+
                                 // Send to Host (90% of percentage + remaining rent)
                                 if (totalToHostWei.compareTo(BigInteger.ZERO) > 0 && hostAddress != null) {
                                     bookingPaymentContractService.processPartialRefund(
@@ -587,24 +616,26 @@ public class ReclamationService {
                                             true // refundFromRent = true
                                     );
                                 }
-                                
-                                log.info("✅ Refund processed: Guest={} ETH (Deposit: {} + Rent percentage: {}), Platform={} ETH, Host={} ETH", 
-                                        new BigDecimal(totalRefundToGuest).divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)),
+
+                                log.info(
+                                        "✅ Refund processed: Guest={} ETH (Deposit: {} + Rent percentage: {}), Platform={} ETH, Host={} ETH",
+                                        new BigDecimal(totalRefundToGuest)
+                                                .divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)),
                                         depositPortion, rentPercentage, platformFee, totalToHost);
                             } else if (reclamation.getComplainantRole() == ComplainantRole.HOST) {
                                 // For Host reclamations:
                                 // Rent: 10% to platform, 90% to host
                                 // Deposit: penalty percentage to host, remaining to guest
-                                
+
                                 // Calculate Rent distribution (10% platform, 90% host)
                                 BigDecimal platformFeePercent = new BigDecimal("0.10");
                                 BigDecimal platformFeeFromRent = totalRent.multiply(platformFeePercent);
                                 BigDecimal rentToHost = totalRent.subtract(platformFeeFromRent);
-                                
+
                                 // Deposit distribution: penalty to host, remaining to guest
                                 BigDecimal penaltyFromDeposit = refundAmount; // This is the penalty amount from deposit
                                 BigDecimal depositToGuest = totalDeposit.subtract(penaltyFromDeposit);
-                                
+
                                 BigInteger rentToHostWei = rentToHost
                                         .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                         .toBigInteger();
@@ -617,16 +648,17 @@ public class ReclamationService {
                                 BigInteger depositToGuestWei = depositToGuest
                                         .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                         .toBigInteger();
-                                
+
                                 // Get guest wallet address
                                 String guestAddress = getRecipientWalletAddressForGuest(reclamation);
-                                
-                                log.info("💰 Processing host reclamation: Rent (90%={} to host, 10%={} to platform), Deposit (penalty={} to host, remaining={} to guest)", 
+
+                                log.info(
+                                        "💰 Processing host reclamation: Rent (90%={} to host, 10%={} to platform), Deposit (penalty={} to host, remaining={} to guest)",
                                         rentToHost, platformFeeFromRent, penaltyFromDeposit, depositToGuest);
-                                
+
                                 // For both completed and non-completed bookings, use processPartialRefund
                                 // to send multiple amounts to different recipients
-                                
+
                                 // Send Rent (90%) to host
                                 if (rentToHostWei.compareTo(BigInteger.ZERO) > 0) {
                                     bookingPaymentContractService.processPartialRefund(
@@ -636,7 +668,7 @@ public class ReclamationService {
                                             true // refundFromRent = true
                                     );
                                 }
-                                
+
                                 // Send Platform Fee (10% of rent)
                                 if (platformFeeFromRentWei.compareTo(BigInteger.ZERO) > 0) {
                                     String platformWallet = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
@@ -647,7 +679,7 @@ public class ReclamationService {
                                             true // refundFromRent = true
                                     );
                                 }
-                                
+
                                 // Send Penalty from deposit to host
                                 if (penaltyFromDepositWei.compareTo(BigInteger.ZERO) > 0) {
                                     bookingPaymentContractService.processPartialRefund(
@@ -657,7 +689,7 @@ public class ReclamationService {
                                             false // refundFromRent = false (penalty from deposit)
                                     );
                                 }
-                                
+
                                 // Send Remaining deposit to guest
                                 if (depositToGuestWei.compareTo(BigInteger.ZERO) > 0 && guestAddress != null) {
                                     bookingPaymentContractService.processPartialRefund(
@@ -667,13 +699,16 @@ public class ReclamationService {
                                             false // refundFromRent = false (refund from deposit)
                                     );
                                 }
-                                
+
                                 BigInteger totalToHost = rentToHostWei.add(penaltyFromDepositWei);
-                                log.info("✅ Host reclamation processed: Host={} ETH (Rent 90%: {} + Penalty: {}), Platform={} ETH, Guest={} ETH", 
-                                        new BigDecimal(totalToHost).divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)),
+                                log.info(
+                                        "✅ Host reclamation processed: Host={} ETH (Rent 90%: {} + Penalty: {}), Platform={} ETH, Guest={} ETH",
+                                        new BigDecimal(totalToHost)
+                                                .divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)),
                                         rentToHost, penaltyFromDeposit, platformFeeFromRent, depositToGuest);
-                                
-                                // Note: For completed bookings, we use processPartialRefund instead of processReclamationRefund
+
+                                // Note: For completed bookings, we use processPartialRefund instead of
+                                // processReclamationRefund
                                 // because we need to send to multiple recipients (host, platform, guest)
                             } else {
                                 // Normal guest refund (should not happen with new system, but keep for safety)
@@ -682,39 +717,43 @@ public class ReclamationService {
                                         .toBigInteger();
 
                                 boolean refundFromRent = reclamation.getComplainantRole() == ComplainantRole.GUEST;
-                                
-                                // Calculate and send platform fee for guest refunds (10% of original refund before fee deduction)
+
+                                // Calculate and send platform fee for guest refunds (10% of original refund
+                                // before fee deduction)
                                 BigInteger platformFeeWei = BigInteger.ZERO;
                                 if (refundFromRent && reclamation.getComplainantRole() == ComplainantRole.GUEST) {
                                     // refundAmount = originalRefund * 0.90, so originalRefund = refundAmount / 0.90
-                                    BigDecimal originalRefund = refundAmount.divide(new BigDecimal("0.90"), 2, RoundingMode.HALF_UP);
+                                    BigDecimal originalRefund = refundAmount.divide(new BigDecimal("0.90"), 2,
+                                            RoundingMode.HALF_UP);
                                     BigDecimal platformFee = originalRefund.subtract(refundAmount);
                                     platformFeeWei = platformFee
                                             .multiply(BigDecimal.valueOf(1_000_000_000_000_000_000L))
                                             .toBigInteger();
-                                    
-                                    log.info("💰 Calculating platform fee: original refund={} ETH, refund after fee={} ETH, platform fee={} ETH", 
+
+                                    log.info(
+                                            "💰 Calculating platform fee: original refund={} ETH, refund after fee={} ETH, platform fee={} ETH",
                                             originalRefund, refundAmount, platformFee);
                                 }
 
                                 // Send refund and platform fee in one call for completed bookings
                                 if (isBookingCompleted) {
-                                    log.info("💰 Processing refund for completed booking: Guest={} ETH, Platform Fee={} ETH", 
+                                    log.info(
+                                            "💰 Processing refund for completed booking: Guest={} ETH, Platform Fee={} ETH",
                                             refundAmount, platformFeeWei);
                                     bookingPaymentContractService.processReclamationRefund(
                                             reclamation.getBookingId(),
                                             recipientAddress,
-                                            refundAmountWei,      // Refund to guest
-                                            platformFeeWei,       // Platform fee to PLATFORM_WALLET
-                                            refundFromRent
-                                    );
+                                            refundAmountWei, // Refund to guest
+                                            platformFeeWei, // Platform fee to PLATFORM_WALLET
+                                            refundFromRent);
                                     if (platformFeeWei.compareTo(BigInteger.ZERO) > 0) {
-                                        log.info("✅ Platform fee sent to platform wallet: {} ETH", 
-                                                new BigDecimal(platformFeeWei).divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)));
+                                        log.info("✅ Platform fee sent to platform wallet: {} ETH",
+                                                new BigDecimal(platformFeeWei)
+                                                        .divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)));
                                     }
                                 } else {
                                     log.info("📋 Booking not completed yet. Using processPartialRefund");
-                                    
+
                                     // Send platform fee first (if any)
                                     if (platformFeeWei.compareTo(BigInteger.ZERO) > 0) {
                                         String platformWallet = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
@@ -724,17 +763,17 @@ public class ReclamationService {
                                                 platformFeeWei,
                                                 true // refundFromRent = true (platform fee comes from rent)
                                         );
-                                        log.info("💰 Platform fee sent to platform wallet: {} ETH", 
-                                                new BigDecimal(platformFeeWei).divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)));
+                                        log.info("💰 Platform fee sent to platform wallet: {} ETH",
+                                                new BigDecimal(platformFeeWei)
+                                                        .divide(BigDecimal.valueOf(1_000_000_000_000_000_000L)));
                                     }
-                                    
+
                                     // Then send refund to guest
                                     bookingPaymentContractService.processPartialRefund(
                                             reclamation.getBookingId(),
                                             recipientAddress,
                                             refundAmountWei,
-                                            refundFromRent
-                                    );
+                                            refundFromRent);
                                 }
                             }
                         }
@@ -749,27 +788,31 @@ public class ReclamationService {
             }
 
             if (penaltyPoints != null && penaltyPoints > 0) {
-                log.info("🔍 Checking penalty points application - penaltyPoints: {}, targetUserId: {}, reclamationId: {}", 
+                log.info(
+                        "🔍 Checking penalty points application - penaltyPoints: {}, targetUserId: {}, reclamationId: {}",
                         penaltyPoints, reclamation.getTargetUserId(), reclamationId);
-                
+
                 if (reclamation.getTargetUserId() != null && reclamation.getTargetUserId() > 0) {
-                    log.info("🔗 Deducting penalty points directly: userId={}, penaltyPoints={}", 
+                    log.info("🔗 Deducting penalty points directly: userId={}, penaltyPoints={}",
                             reclamation.getTargetUserId(), penaltyPoints);
-                    
+
                     try {
                         userScoreService.deductPenaltyPoints(reclamation.getTargetUserId(), penaltyPoints);
                         log.info("✅ Penalty points deducted successfully for user: {}", reclamation.getTargetUserId());
-                        checkAndSuspendProperty(reclamation.getBookingId(), reclamation.getTargetUserId(), penaltyPoints);
+                        checkAndSuspendProperty(reclamation.getBookingId(), reclamation.getTargetUserId(),
+                                penaltyPoints);
                     } catch (Exception e) {
                         log.error("❌ Failed to deduct penalty points: {}", e.getMessage(), e);
                     }
                 } else {
-                    log.error("❌ CRITICAL: Cannot update penalty points - targetUserId is null or 0! reclamationId: {}, targetUserId: {}", 
+                    log.error(
+                            "❌ CRITICAL: Cannot update penalty points - targetUserId is null or 0! reclamationId: {}, targetUserId: {}",
                             reclamationId, reclamation.getTargetUserId());
                     log.error("❌ This means the penalty will NOT be applied to the user's score!");
                 }
             } else {
-                log.warn("⚠️ No penalty points to apply: penaltyPoints={} (reclamationId: {})", penaltyPoints, reclamationId);
+                log.warn("⚠️ No penalty points to apply: penaltyPoints={} (reclamationId: {})", penaltyPoints,
+                        reclamationId);
             }
 
         } else {
@@ -806,12 +849,12 @@ public class ReclamationService {
 
     private String getRecipientWalletAddress(Reclamation reclamation) {
         try {
-            Long userId = reclamation.getComplainantRole() == ComplainantRole.GUEST 
-                    ? reclamation.getComplainantId() 
+            Long userId = reclamation.getComplainantRole() == ComplainantRole.GUEST
+                    ? reclamation.getComplainantId()
                     : reclamation.getTargetUserId();
-            
+
             UserAccount user = userScoreService.getUserAccountRepository().findById(userId).orElse(null);
-            
+
             if (user != null && user.getWalletAddress() != null) {
                 return user.getWalletAddress();
             }
@@ -825,17 +868,17 @@ public class ReclamationService {
         try {
             // For guest reclamations, host is the target user
             // For host reclamations, host is the complainant
-            Long hostUserId = reclamation.getComplainantRole() == ComplainantRole.GUEST 
-                    ? reclamation.getTargetUserId() 
+            Long hostUserId = reclamation.getComplainantRole() == ComplainantRole.GUEST
+                    ? reclamation.getTargetUserId()
                     : reclamation.getComplainantId();
-            
+
             if (hostUserId == null || hostUserId == 0) {
                 log.warn("Host user ID is null or 0 for reclamation: {}", reclamation.getId());
                 return null;
             }
-            
+
             UserAccount host = userScoreService.getUserAccountRepository().findById(hostUserId).orElse(null);
-            
+
             if (host != null && host.getWalletAddress() != null) {
                 return host.getWalletAddress();
             } else {
@@ -851,17 +894,17 @@ public class ReclamationService {
         try {
             // For host reclamations, guest is the target user
             // For guest reclamations, guest is the complainant
-            Long guestUserId = reclamation.getComplainantRole() == ComplainantRole.HOST 
-                    ? reclamation.getTargetUserId() 
+            Long guestUserId = reclamation.getComplainantRole() == ComplainantRole.HOST
+                    ? reclamation.getTargetUserId()
                     : reclamation.getComplainantId();
-            
+
             if (guestUserId == null || guestUserId == 0) {
                 log.warn("Guest user ID is null or 0 for reclamation: {}", reclamation.getId());
                 return null;
             }
-            
+
             UserAccount guest = userScoreService.getUserAccountRepository().findById(guestUserId).orElse(null);
-            
+
             if (guest != null && guest.getWalletAddress() != null) {
                 return guest.getWalletAddress();
             } else {
@@ -881,9 +924,9 @@ public class ReclamationService {
         public String penaltyAmountWei;
         public boolean refundFromRent;
 
-        public ReclamationRefundRequest(Long bookingId, String recipientAddress, 
-                                       String refundAmountWei, String penaltyAmountWei, 
-                                       boolean refundFromRent) {
+        public ReclamationRefundRequest(Long bookingId, String recipientAddress,
+                String refundAmountWei, String penaltyAmountWei,
+                boolean refundFromRent) {
             this.bookingId = bookingId;
             this.recipientAddress = recipientAddress;
             this.refundAmountWei = refundAmountWei;
@@ -895,16 +938,16 @@ public class ReclamationService {
     private void updateBookingStatusToCompleted(Long bookingId) {
         try {
             log.info("🔄 Updating booking status to COMPLETED: bookingId={}", bookingId);
-            
+
             Map<String, String> statusUpdate = new HashMap<>();
             statusUpdate.put("status", "COMPLETED");
-            
+
             String url = BOOKING_SERVICE_URL + "/api/bookings/" + bookingId + "/status";
             restTemplate.put(url, statusUpdate);
-            
+
             log.info("✅ Booking status updated to COMPLETED: bookingId={}", bookingId);
         } catch (Exception e) {
-            log.error("❌ Failed to update booking status to COMPLETED: bookingId={}, error={}", 
+            log.error("❌ Failed to update booking status to COMPLETED: bookingId={}, error={}",
                     bookingId, e.getMessage(), e);
         }
     }
@@ -914,15 +957,15 @@ public class ReclamationService {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
                     BOOKING_SERVICE_URL + "/api/bookings/" + bookingId,
-                    Map.class
-            );
+                    Map.class);
 
             if (booking != null && booking.get("propertyId") != null) {
                 String propertyId = booking.get("propertyId").toString();
 
                 if (penaltyPoints >= 15) {
                     try {
-                        log.warn("⚠️ Property {} should be suspended due to host penalty points: {}", propertyId, penaltyPoints);
+                        log.warn("⚠️ Property {} should be suspended due to host penalty points: {}", propertyId,
+                                penaltyPoints);
                         log.warn("⚠️ Admin should manually suspend property {} via admin dashboard", propertyId);
                     } catch (Exception e) {
                         log.error("Failed to suspend property: {}", e.getMessage());
@@ -957,23 +1000,21 @@ public class ReclamationService {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
                     BOOKING_SERVICE_URL + "/api/bookings/" + reclamation.getBookingId(),
-                    Map.class
-            );
-            
+                    Map.class);
+
             if (booking != null) {
                 Long bookingUserId = Long.valueOf(booking.get("userId").toString());
                 Object propertyIdObj = booking.get("propertyId");
                 String propertyId = propertyIdObj != null ? propertyIdObj.toString() : null;
-                
+
                 if (propertyId != null) {
                     Long ownerId = null;
-                    
+
                     try {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> propertyInfo = restTemplate.getForObject(
                                 BOOKING_SERVICE_URL + "/api/bookings/property/" + propertyId,
-                                Map.class
-                        );
+                                Map.class);
                         if (propertyInfo != null) {
                             Object ownerIdObj = propertyInfo.get("ownerId");
                             if (ownerIdObj != null) {
@@ -991,8 +1032,7 @@ public class ReclamationService {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> propertyInfo = restTemplate.getForObject(
                                     PROPERTY_SERVICE_URL + "/api/v1/properties/" + propertyId + "/booking-info",
-                                    Map.class
-                            );
+                                    Map.class);
                             if (propertyInfo != null) {
                                 Object ownerIdObj = propertyInfo.get("ownerId");
                                 if (ownerIdObj != null) {
@@ -1009,7 +1049,7 @@ public class ReclamationService {
                             log.warn("Could not fetch property info: {}", e2.getMessage());
                         }
                     }
-                    
+
                     if (reclamation.getComplainantRole() == ComplainantRole.GUEST) {
                         return ownerId;
                     } else if (reclamation.getComplainantRole() == ComplainantRole.HOST) {
@@ -1044,22 +1084,23 @@ public class ReclamationService {
      * Only allowed if status is OPEN and user is the complainant
      */
     @Transactional
-    public Reclamation updateReclamation(Long reclamationId, Long userId, String title, String description, List<MultipartFile> newImages) {
+    public Reclamation updateReclamation(Long reclamationId, Long userId, String title, String description,
+            List<MultipartFile> newImages) {
         log.info("Updating reclamation: id={}, userId={}", reclamationId, userId);
-        
+
         Reclamation reclamation = reclamationRepository.findById(reclamationId)
                 .orElseThrow(() -> new RuntimeException("Reclamation not found"));
-        
+
         // Check if user is the complainant
         if (!reclamation.getComplainantId().equals(userId)) {
             throw new RuntimeException("Only the complainant can update this reclamation");
         }
-        
+
         // Check if status allows updates (only OPEN status)
         if (reclamation.getStatus() != ReclamationStatus.OPEN) {
             throw new RuntimeException("Cannot update reclamation. Status must be OPEN");
         }
-        
+
         // Update title and description
         if (title != null && !title.trim().isEmpty()) {
             reclamation.setTitle(title.trim());
@@ -1067,7 +1108,7 @@ public class ReclamationService {
         if (description != null && !description.trim().isEmpty()) {
             reclamation.setDescription(description.trim());
         }
-        
+
         // Update images if provided
         // If newImages is provided (even if empty), replace all old images
         // If newImages is null, keep existing images unchanged
@@ -1075,11 +1116,12 @@ public class ReclamationService {
             if (newImages.size() > 3) {
                 throw new RuntimeException("Maximum 3 images allowed");
             }
-            
+
             try {
                 // Delete old attachments only if new images are provided
                 if (!newImages.isEmpty()) {
-                    List<ReclamationAttachment> oldAttachments = attachmentRepository.findByReclamationIdOrderByDisplayOrderAsc(reclamationId);
+                    List<ReclamationAttachment> oldAttachments = attachmentRepository
+                            .findByReclamationIdOrderByDisplayOrderAsc(reclamationId);
                     for (ReclamationAttachment attachment : oldAttachments) {
                         try {
                             fileStorageService.deleteFile(reclamationId, attachment.getFilePath());
@@ -1088,7 +1130,7 @@ public class ReclamationService {
                         }
                     }
                     attachmentRepository.deleteAll(oldAttachments);
-                    
+
                     // Save new attachments
                     List<String> savedPaths = fileStorageService.saveFiles(reclamationId, newImages);
                     int order = 1;
@@ -1101,11 +1143,12 @@ public class ReclamationService {
                                 .build();
                         attachmentRepository.save(attachment);
                     }
-                    
+
                     log.info("Updated {} images for reclamation: {}", savedPaths.size(), reclamationId);
                 } else {
                     // If empty list is provided, delete all images
-                    List<ReclamationAttachment> oldAttachments = attachmentRepository.findByReclamationIdOrderByDisplayOrderAsc(reclamationId);
+                    List<ReclamationAttachment> oldAttachments = attachmentRepository
+                            .findByReclamationIdOrderByDisplayOrderAsc(reclamationId);
                     for (ReclamationAttachment attachment : oldAttachments) {
                         try {
                             fileStorageService.deleteFile(reclamationId, attachment.getFilePath());
@@ -1122,10 +1165,9 @@ public class ReclamationService {
             }
         }
         // If newImages is null, keep existing images unchanged
-        
+
         reclamation = reclamationRepository.save(reclamation);
         log.info("✅ Reclamation updated: id={}", reclamationId);
         return reclamation;
     }
 }
-
