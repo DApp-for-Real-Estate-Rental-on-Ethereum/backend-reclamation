@@ -9,9 +9,22 @@ import java.util.List;
 @Repository
 public interface ReclamationRepository extends JpaRepository<Reclamation, Long> {
     List<Reclamation> findByBookingId(Long bookingId);
-    List<Reclamation> findByComplainantId(Long complainantId);
-    List<Reclamation> findByTargetUserId(Long targetUserId);
-    List<Reclamation> findByComplainantIdAndComplainantRole(Long complainantId, Reclamation.ComplainantRole role);
-    List<Reclamation> findByBookingIdAndComplainantId(Long bookingId, Long complainantId);
-}
 
+    List<Reclamation> findByComplainantId(Long complainantId);
+
+    List<Reclamation> findByTargetUserId(Long targetUserId);
+
+    List<Reclamation> findByComplainantIdAndComplainantRole(Long complainantId, Reclamation.ComplainantRole role);
+
+    List<Reclamation> findByBookingIdAndComplainantId(Long bookingId, Long complainantId);
+
+    Long countByComplainantId(Long complainantId);
+
+    Long countByTargetUserId(Long targetUserId);
+
+    Long countByComplainantIdAndStatus(Long complainantId,
+            ma.fstt.reclamationservice.domain.entity.ReclamationStatus status);
+
+    Long countByComplainantIdAndStatusIn(Long complainantId,
+            List<ma.fstt.reclamationservice.domain.entity.ReclamationStatus> statuses);
+}

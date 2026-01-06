@@ -31,8 +31,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class ReclamationService {
-    private static final String BOOKING_SERVICE_URL = "http://booking-service:8083";
-    private static final String PROPERTY_SERVICE_URL = "http://property-service:8081";
+    @org.springframework.beans.factory.annotation.Value("${app.booking-service.url:http://booking-service.derent-cluster.local:8083}")
+    private String bookingServiceUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${app.property-service.url:http://property-service.derent-cluster.local:8081}")
+    private String propertyServiceUrl;
 
     private final RestTemplate restTemplate;
     private final ReclamationRepository reclamationRepository;
@@ -59,7 +62,7 @@ public class ReclamationService {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
-                    BOOKING_SERVICE_URL + "/api/bookings/" + bookingId,
+                    bookingServiceUrl + "/api/bookings/" + bookingId,
                     Map.class);
 
             if (booking != null) {
@@ -76,7 +79,7 @@ public class ReclamationService {
                     try {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> propertyInfo = restTemplate.getForObject(
-                                BOOKING_SERVICE_URL + "/api/bookings/property/" + propertyId,
+                                bookingServiceUrl + "/api/bookings/property/" + propertyId,
                                 Map.class);
                         if (propertyInfo != null) {
                             log.info("✅ Got property info from booking-service");
@@ -106,7 +109,7 @@ public class ReclamationService {
                         try {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> propertyInfo = restTemplate.getForObject(
-                                    PROPERTY_SERVICE_URL + "/api/v1/properties/" + propertyId + "/booking-info",
+                                    propertyServiceUrl + "/api/v1/properties/" + propertyId + "/booking-info",
                                     Map.class);
                             if (propertyInfo != null) {
                                 log.info("✅ Got property info from property-service (booking-info)");
@@ -365,7 +368,7 @@ public class ReclamationService {
         if (approved) {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
-                    BOOKING_SERVICE_URL + "/api/bookings/" + reclamation.getBookingId(),
+                    bookingServiceUrl + "/api/bookings/" + reclamation.getBookingId(),
                     Map.class);
 
             BigDecimal totalRent = BigDecimal.ZERO;
@@ -942,7 +945,7 @@ public class ReclamationService {
             Map<String, String> statusUpdate = new HashMap<>();
             statusUpdate.put("status", "COMPLETED");
 
-            String url = BOOKING_SERVICE_URL + "/api/bookings/" + bookingId + "/status";
+            String url = bookingServiceUrl + "/api/bookings/" + bookingId + "/status";
             restTemplate.put(url, statusUpdate);
 
             log.info("✅ Booking status updated to COMPLETED: bookingId={}", bookingId);
@@ -956,7 +959,7 @@ public class ReclamationService {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
-                    BOOKING_SERVICE_URL + "/api/bookings/" + bookingId,
+                    bookingServiceUrl + "/api/bookings/" + bookingId,
                     Map.class);
 
             if (booking != null && booking.get("propertyId") != null) {
@@ -999,7 +1002,7 @@ public class ReclamationService {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> booking = restTemplate.getForObject(
-                    BOOKING_SERVICE_URL + "/api/bookings/" + reclamation.getBookingId(),
+                    bookingServiceUrl + "/api/bookings/" + reclamation.getBookingId(),
                     Map.class);
 
             if (booking != null) {
@@ -1013,7 +1016,7 @@ public class ReclamationService {
                     try {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> propertyInfo = restTemplate.getForObject(
-                                BOOKING_SERVICE_URL + "/api/bookings/property/" + propertyId,
+                                bookingServiceUrl + "/api/bookings/property/" + propertyId,
                                 Map.class);
                         if (propertyInfo != null) {
                             Object ownerIdObj = propertyInfo.get("ownerId");
@@ -1031,7 +1034,7 @@ public class ReclamationService {
                         try {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> propertyInfo = restTemplate.getForObject(
-                                    PROPERTY_SERVICE_URL + "/api/v1/properties/" + propertyId + "/booking-info",
+                                    propertyServiceUrl + "/api/v1/properties/" + propertyId + "/booking-info",
                                     Map.class);
                             if (propertyInfo != null) {
                                 Object ownerIdObj = propertyInfo.get("ownerId");
@@ -1169,5 +1172,28 @@ public class ReclamationService {
         reclamation = reclamationRepository.save(reclamation);
         log.info("✅ Reclamation updated: id={}", reclamationId);
         return reclamation;
+    }
+
+    public ma.fstt.reclamationservice.api.dto.ReclamationStatsDTO getReclamationStats(Long userId) {
+        Long totalFiled = reclamationRepository.countByComplainantId(userId);
+        Long totalReceived = reclamationRepository.countByTargetUserId(userId);
+
+        List<ma.fstt.reclamationservice.domain.entity.ReclamationStatus> pendingStatuses = List.of(
+                ma.fstt.reclamationservice.domain.entity.ReclamationStatus.OPEN,
+                ma.fstt.reclamationservice.domain.entity.ReclamationStatus.IN_REVIEW);
+
+        // This relies on the new method I added to the repository
+        Long pendingFiled = reclamationRepository.countByComplainantIdAndStatusIn(userId, pendingStatuses);
+
+        Long resolvedFiled = reclamationRepository.countByComplainantIdAndStatus(userId,
+                ma.fstt.reclamationservice.domain.entity.ReclamationStatus.RESOLVED);
+
+        return ma.fstt.reclamationservice.api.dto.ReclamationStatsDTO.builder()
+                .id(userId)
+                .totalFiled(totalFiled != null ? totalFiled : 0L)
+                .totalReceived(totalReceived != null ? totalReceived : 0L)
+                .pendingFiled(pendingFiled != null ? pendingFiled : 0L)
+                .resolvedFiled(resolvedFiled != null ? resolvedFiled : 0L)
+                .build();
     }
 }

@@ -278,4 +278,20 @@ public class ReclamationController {
             return ResponseEntity.status(500).body(response);
         }
     }
+
+    @GetMapping("/stats")
+    public ResponseEntity<ma.fstt.reclamationservice.api.dto.ReclamationStatsDTO> getReclamationStats(
+            @RequestParam Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) String requesterId,
+            @RequestHeader(value = "X-User-Roles", required = false) String requesterRoles) {
+
+        boolean isAdmin = requesterRoles != null && requesterRoles.contains("ADMIN");
+        boolean isSelf = requesterId != null && requesterId.equals(userId.toString());
+
+        if (!isAdmin && !isSelf) {
+            return ResponseEntity.status(403).build();
+        }
+
+        return ResponseEntity.ok(reclamationService.getReclamationStats(userId));
+    }
 }
