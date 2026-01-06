@@ -1,0 +1,21 @@
+# Maven build output
+/target/
+
+# IDE files
+/.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS junk
+.DS_Store
+
+# Local uploads or generated assets
+/uploads/
+
+# Logs
+*.log
+
+# Wrapper cache
+.mvn/wrapper/maven-wrapper.jar
