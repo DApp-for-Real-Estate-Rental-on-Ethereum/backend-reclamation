@@ -1,6 +1,7 @@
 package ma.fstt.reclamationservice.api.controller;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import ma.fstt.reclamationservice.core.service.ReclamationService;
 import ma.fstt.reclamationservice.domain.entity.Reclamation;
 import ma.fstt.reclamationservice.domain.entity.ReclamationAttachment;
@@ -26,6 +27,7 @@ import java.util.Map;
 @RequestMapping("/api/reclamations")
 // CORS is handled by API Gateway - no @CrossOrigin here
 @RequiredArgsConstructor
+@Slf4j
 public class ReclamationController {
 
     private final ReclamationService reclamationService;
@@ -106,12 +108,15 @@ public class ReclamationController {
     }
 
     @GetMapping("/my-complaints")
-    public ResponseEntity<List<Reclamation>> getMyComplaints(@RequestParam Long userId) {
+    public ResponseEntity<?> getMyComplaints(@RequestParam Long userId) {
         try {
+            log.info("Getting complaints for userId: {}", userId);
             List<Reclamation> reclamations = reclamationService.getReclamationsByComplainantId(userId);
+            log.info("Found {} complaints for userId: {}", reclamations.size(), userId);
             return ResponseEntity.ok(reclamations);
         } catch (Exception e) {
-            return ResponseEntity.status(500).build();
+            log.error("Error getting complaints for userId {}: {}", userId, e.getMessage(), e);
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
         }
     }
 

@@ -234,9 +234,9 @@ public class ReclamationService {
     }
 
     public List<Reclamation> getReclamationsByTargetUserId(Long targetUserId) {
-        log.info("🔍 Fetching reclamations against targetUserId: {}", targetUserId);
+        log.info(" Fetching reclamations against targetUserId: {}", targetUserId);
         List<Reclamation> reclamations = reclamationRepository.findByTargetUserId(targetUserId);
-        log.info("📊 Found {} reclamations against targetUserId: {}", reclamations.size(), targetUserId);
+        log.info(" Found {} reclamations against targetUserId: {}", reclamations.size(), targetUserId);
         return reclamations;
     }
 
